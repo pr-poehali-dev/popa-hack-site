@@ -22,6 +22,7 @@ const Index = () => {
   const [username, setUsername] = useState("");
   const [description, setDescription] = useState("");
   const [uploading, setUploading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
@@ -41,9 +42,22 @@ const Index = () => {
     return () => clearInterval(interval);
   }, []);
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (!file) return;
+    if (file) {
+      setSelectedFile(file);
+    }
+  };
+
+  const handleUpload = async () => {
+    if (!selectedFile) {
+      toast({
+        title: "Выберите файл",
+        description: "Пожалуйста, выберите файл для загрузки",
+        variant: "destructive"
+      });
+      return;
+    }
 
     if (!username.trim()) {
       toast({
@@ -69,7 +83,7 @@ const Index = () => {
           },
           body: JSON.stringify({
             username: username.trim(),
-            filename: file.name,
+            filename: selectedFile.name,
             fileData: base64File,
             description: description.trim()
           })
@@ -80,13 +94,17 @@ const Index = () => {
         if (result.success) {
           toast({
             title: "Файл загружен!",
-            description: "Ваш файл появится в ленте"
+            description: "Ваш файл появился в ленте"
           });
           setDescription("");
+          setSelectedFile(null);
+          if (fileInputRef.current) {
+            fileInputRef.current.value = "";
+          }
           await fetchFiles();
         }
       };
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(selectedFile);
     } catch (error) {
       toast({
         title: "Ошибка",
@@ -183,28 +201,65 @@ const Index = () => {
                 rows={3}
               />
             </div>
-            <Button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              className="w-full"
-              size="lg"
-            >
-              {uploading ? (
-                <>
-                  <Icon name="Loader2" size={20} className="mr-2 animate-spin" />
-                  Загрузка...
-                </>
-              ) : (
-                <>
-                  <Icon name="Upload" size={20} className="mr-2" />
-                  Выбрать и загрузить файл
-                </>
-              )}
-            </Button>
+            
+            {selectedFile && (
+              <div className="bg-secondary/50 rounded-lg p-4 border border-border">
+                <div className="flex items-center gap-3">
+                  <Icon name="File" size={24} className="text-primary" />
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{selectedFile.name}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {(selectedFile.size / 1024).toFixed(2)} KB
+                    </p>
+                  </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedFile(null);
+                      if (fileInputRef.current) fileInputRef.current.value = "";
+                    }}
+                  >
+                    <Icon name="X" size={18} />
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <div className="flex gap-2">
+              <Button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                variant="outline"
+                className="flex-1"
+                size="lg"
+              >
+                <Icon name="FolderOpen" size={20} className="mr-2" />
+                Выбрать файл
+              </Button>
+              <Button
+                onClick={handleUpload}
+                disabled={uploading || !selectedFile}
+                className="flex-1"
+                size="lg"
+              >
+                {uploading ? (
+                  <>
+                    <Icon name="Loader2" size={20} className="mr-2 animate-spin" />
+                    Загрузка...
+                  </>
+                ) : (
+                  <>
+                    <Icon name="Upload" size={20} className="mr-2" />
+                    Загрузить
+                  </>
+                )}
+              </Button>
+            </div>
             <input
               ref={fileInputRef}
               type="file"
-              onChange={handleFileUpload}
+              onChange={handleFileSelect}
               className="hidden"
             />
           </CardContent>
