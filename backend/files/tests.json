@@ -1,0 +1,31 @@
+{
+  "tests": [
+    {
+      "name": "Get all files list",
+      "method": "GET",
+      "path": "/",
+      "expectedStatus": 200,
+      "expectedBody": {
+        "files": "array"
+      },
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Upload new file",
+      "method": "POST",
+      "path": "/",
+      "body": {
+        "username": "TestUser",
+        "filename": "test.txt",
+        "fileData": "SGVsbG8gV29ybGQh",
+        "description": "Test file"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true,
+        "fileId": "number"
+      },
+      "bodyMatcher": "partial"
+    }
+  ]
+}
