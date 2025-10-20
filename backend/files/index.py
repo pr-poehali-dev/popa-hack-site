@@ -6,7 +6,7 @@ from typing import Dict, Any
 
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     '''
-    Business: API для загрузки, получения и скачивания файлов пользователей
+    Business: API для загрузки, получения, скачивания, удаления файлов и работы с избранным
     Args: event - dict с httpMethod, body, queryStringParameters, pathParams
           context - object с атрибутами request_id, function_name
     Returns: HTTP response dict
@@ -18,7 +18,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             'statusCode': 200,
             'headers': {
                 'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+                'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
                 'Access-Control-Allow-Headers': 'Content-Type, X-Username',
                 'Access-Control-Max-Age': '86400'
             },
@@ -70,8 +70,41 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     if method == 'GET':
         params = event.get('queryStringParameters') or {}
         file_id = params.get('id')
+        username = params.get('username')
+        action = params.get('action')
         
         cur = conn.cursor()
+        
+        if action == 'favorites' and username:
+            cur.execute(
+                "SELECT f.id, f.filename, f.file_size, f.description, f.uploaded_at, u.username FROM files f JOIN users u ON f.user_id = u.id JOIN favorites fav ON fav.file_id = f.id WHERE fav.username = %s ORDER BY fav.created_at DESC",
+                (username,)
+            )
+            rows = cur.fetchall()
+            
+            files = []
+            for row in rows:
+                files.append({
+                    'id': row[0],
+                    'filename': row[1],
+                    'fileSize': row[2],
+                    'description': row[3],
+                    'uploadedAt': row[4].isoformat(),
+                    'username': row[5]
+                })
+            
+            cur.close()
+            conn.close()
+            
+            return {
+                'statusCode': 200,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                'body': json.dumps({'files': files}),
+                'isBase64Encoded': False
+            }
         
         if file_id:
             cur.execute(
@@ -141,6 +174,116 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'body': json.dumps({'files': files}),
                 'isBase64Encoded': False
             }
+    
+    if method == 'PUT':
+        body_data = json.loads(event.get('body', '{}'))
+        action = body_data.get('action')
+        file_id = body_data.get('fileId')
+        username = body_data.get('username')
+        
+        cur = conn.cursor()
+        
+        if action == 'favorite':
+            cur.execute(
+                "SELECT id FROM favorites WHERE file_id = %s AND username = %s",
+                (file_id, username)
+            )
+            exists = cur.fetchone()
+            
+            if exists:
+                cur.execute(
+                    "DELETE FROM favorites WHERE file_id = %s AND username = %s",
+                    (file_id, username)
+                )
+                is_favorited = False
+            else:
+                cur.execute(
+                    "INSERT INTO favorites (file_id, username) VALUES (%s, %s)",
+                    (file_id, username)
+                )
+                is_favorited = True
+            
+            conn.commit()
+            cur.close()
+            conn.close()
+            
+            return {
+                'statusCode': 200,
+                'headers': {
+                    'Content-Type': 'application/json',
+                    'Access-Control-Allow-Origin': '*'
+                },
+                'body': json.dumps({'success': True, 'isFavorited': is_favorited}),
+                'isBase64Encoded': False
+            }
+        
+        cur.close()
+        conn.close()
+        return {
+            'statusCode': 400,
+            'headers': {'Access-Control-Allow-Origin': '*'},
+            'body': json.dumps({'error': 'Invalid action'}),
+            'isBase64Encoded': False
+        }
+    
+    if method == 'DELETE':
+        params = event.get('queryStringParameters') or {}
+        file_id = params.get('id')
+        username = params.get('username')
+        
+        if not file_id or not username:
+            conn.close()
+            return {
+                'statusCode': 400,
+                'headers': {'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'error': 'Missing parameters'}),
+                'isBase64Encoded': False
+            }
+        
+        cur = conn.cursor()
+        
+        cur.execute(
+            "SELECT u.username FROM files f JOIN users u ON f.user_id = u.id WHERE f.id = %s",
+            (file_id,)
+        )
+        row = cur.fetchone()
+        
+        if not row:
+            cur.close()
+            conn.close()
+            return {
+                'statusCode': 404,
+                'headers': {'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'error': 'File not found'}),
+                'isBase64Encoded': False
+            }
+        
+        if row[0] != username:
+            cur.close()
+            conn.close()
+            return {
+                'statusCode': 403,
+                'headers': {'Access-Control-Allow-Origin': '*'},
+                'body': json.dumps({'error': 'Not authorized'}),
+                'isBase64Encoded': False
+            }
+        
+        cur.execute("DELETE FROM favorites WHERE file_id = %s", (file_id,))
+        cur.execute("DELETE FROM files WHERE id = %s", (file_id,))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Content-Type': 'application/json',
+                'Access-Control-Allow-Origin': '*'
+            },
+            'body': json.dumps({'success': True}),
+            'isBase64Encoded': False
+        }
     
     conn.close()
     return {

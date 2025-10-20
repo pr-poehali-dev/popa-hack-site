@@ -26,6 +26,21 @@
         "fileId": "number"
       },
       "bodyMatcher": "partial"
+    },
+    {
+      "name": "Add to favorites",
+      "method": "PUT",
+      "path": "/",
+      "body": {
+        "action": "favorite",
+        "fileId": 1,
+        "username": "TestUser"
+      },
+      "expectedStatus": 200,
+      "expectedBody": {
+        "success": true
+      },
+      "bodyMatcher": "partial"
     }
   ]
 }
