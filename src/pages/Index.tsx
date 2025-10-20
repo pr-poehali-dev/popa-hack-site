@@ -3,10 +3,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import Icon from "@/components/ui/icon";
 import { useState, useRef, useEffect } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { Link } from "react-router-dom";
 
 const API_URL = "https://functions.poehali.dev/536b96e3-5d39-43b4-9a8b-3c4fd26de8d3";
 
@@ -21,14 +21,18 @@ interface FileItem {
 
 const Index = () => {
   const [files, setFiles] = useState<FileItem[]>([]);
-  const [favoriteFiles, setFavoriteFiles] = useState<FileItem[]>([]);
-  const [username, setUsername] = useState("");
+  const [username, setUsername] = useState(localStorage.getItem('username') || "");
   const [description, setDescription] = useState("");
   const [uploading, setUploading] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [currentTab, setCurrentTab] = useState("all");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (username) {
+      localStorage.setItem('username', username);
+    }
+  }, [username]);
 
   const fetchFiles = async () => {
     try {
@@ -40,28 +44,11 @@ const Index = () => {
     }
   };
 
-  const fetchFavorites = async () => {
-    if (!username.trim()) return;
-    try {
-      const response = await fetch(`${API_URL}?action=favorites&username=${encodeURIComponent(username)}`);
-      const data = await response.json();
-      setFavoriteFiles(data.files || []);
-    } catch (error) {
-      console.error("Ошибка загрузки избранного:", error);
-    }
-  };
-
   useEffect(() => {
     fetchFiles();
     const interval = setInterval(fetchFiles, 15000);
     return () => clearInterval(interval);
   }, []);
-
-  useEffect(() => {
-    if (username.trim() && currentTab === 'favorites') {
-      fetchFavorites();
-    }
-  }, [currentTab, username]);
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -201,7 +188,6 @@ const Index = () => {
           title: result.isFavorited ? "Добавлено в избранное" : "Удалено из избранного",
           description: result.isFavorited ? "Файл сохранён в избранном" : "Файл удалён из избранного"
         });
-        await fetchFavorites();
       }
     } catch (error) {
       toast({
@@ -235,7 +221,6 @@ const Index = () => {
           description: "Ваш файл успешно удалён"
         });
         await fetchFiles();
-        await fetchFavorites();
       }
     } catch (error) {
       toast({
@@ -258,14 +243,34 @@ const Index = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
-      <div className="max-w-6xl mx-auto space-y-8">
+    <div className="min-h-screen bg-background">
+      <nav className="border-b border-border bg-card">
+        <div className="max-w-6xl mx-auto px-4 py-4">
+          <div className="flex items-center justify-between">
+            <h1 className="text-2xl font-bold">popa hack</h1>
+            <div className="flex gap-4">
+              <Button variant="default">
+                <Icon name="Home" size={18} className="mr-2" />
+                Главная
+              </Button>
+              <Link to="/favorites">
+                <Button variant="ghost">
+                  <Icon name="Star" size={18} className="mr-2" />
+                  Избранное
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </nav>
+
+      <div className="max-w-6xl mx-auto p-4 md:p-8 space-y-8">
         <div className="text-center space-y-4 animate-fade-in">
-          <h1 className="text-5xl md:text-7xl font-bold tracking-tight">
-            popa hack
-          </h1>
-          <p className="text-muted-foreground text-lg">
+          <h2 className="text-4xl font-bold tracking-tight">
             Обменивайтесь файлами с другими пользователями
+          </h2>
+          <p className="text-muted-foreground text-lg">
+            Загружайте свои файлы и скачивайте файлы других пользователей
           </p>
         </div>
 
@@ -361,24 +366,16 @@ const Index = () => {
           </CardContent>
         </Card>
 
-        <Tabs value={currentTab} onValueChange={setCurrentTab} className="space-y-4">
+        <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <TabsList>
-              <TabsTrigger value="all" className="gap-2">
-                <Icon name="FileStack" size={18} />
-                Все файлы
-              </TabsTrigger>
-              <TabsTrigger value="favorites" className="gap-2">
-                <Icon name="Star" size={18} />
-                Избранное
-              </TabsTrigger>
-            </TabsList>
+            <h3 className="text-2xl font-bold flex items-center gap-2">
+              <Icon name="FileStack" size={28} />
+              Лента файлов
+            </h3>
             <p className="text-sm text-muted-foreground">
               Обновляется каждые 15 секунд
             </p>
           </div>
-
-          <TabsContent value="all">
             {files.length === 0 ? (
               <Card>
                 <CardContent className="py-12 text-center">
@@ -448,80 +445,7 @@ const Index = () => {
                 ))}
               </div>
             )}
-          </TabsContent>
-
-          <TabsContent value="favorites">
-            {!username.trim() ? (
-              <Card>
-                <CardContent className="py-12 text-center">
-                  <Icon name="UserCircle" size={48} className="mx-auto mb-4 text-muted-foreground" />
-                  <p className="text-muted-foreground">
-                    Введите своё имя выше, чтобы видеть избранные файлы
-                  </p>
-                </CardContent>
-              </Card>
-            ) : favoriteFiles.length === 0 ? (
-              <Card>
-                <CardContent className="py-12 text-center">
-                  <Icon name="Star" size={48} className="mx-auto mb-4 text-muted-foreground" />
-                  <p className="text-muted-foreground">
-                    У вас пока нет избранных файлов
-                  </p>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {favoriteFiles.map((file) => (
-                  <Card key={file.id} className="hover-scale transition-all">
-                    <CardHeader>
-                      <div className="flex items-start justify-between gap-2">
-                        <CardTitle className="text-lg flex items-start gap-2 flex-1">
-                          <Icon name="File" size={20} className="mt-1 flex-shrink-0" />
-                          <span className="break-all">{file.filename}</span>
-                        </CardTitle>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                              <Icon name="MoreVertical" size={18} />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem onClick={() => handleToggleFavorite(file.id)}>
-                              <Icon name="StarOff" size={16} className="mr-2" />
-                              Удалить из избранного
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                      <CardDescription>
-                        от {file.username}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      {file.description && (
-                        <p className="text-sm text-muted-foreground line-clamp-2">
-                          {file.description}
-                        </p>
-                      )}
-                      <div className="flex items-center justify-between text-xs text-muted-foreground">
-                        <span>{formatFileSize(file.fileSize)}</span>
-                        <span>{formatDate(file.uploadedAt)}</span>
-                      </div>
-                      <Button
-                        onClick={() => handleDownload(file.id, file.filename)}
-                        className="w-full"
-                        variant="default"
-                      >
-                        <Icon name="Download" size={18} className="mr-2" />
-                        Скачать
-                      </Button>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+        </div>
       </div>
     </div>
   );
